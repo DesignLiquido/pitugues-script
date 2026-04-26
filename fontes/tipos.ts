@@ -1,0 +1,1 @@
+export type ScriptType = 'text/pitugues' | 'texto/pitugues' | 'application/pitugues';

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pitugues Script</title>
+    <style>
+      :root {
+        --fundo: linear-gradient(135deg, #e8f8f5, #fef9e7);
+        --papel: #ffffff;
+        --texto: #1b2631;
+        --primaria: #0f766e;
+        --primaria-escura: #115e59;
+        --borda: #d5dbdb;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: "Trebuchet MS", "Fira Sans", sans-serif;
+        background: var(--fundo);
+        color: var(--texto);
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        background: var(--papel);
+        border-radius: 14px;
+        box-shadow: 0 16px 36px rgba(17, 24, 39, 0.12);
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+      }
+
+      p {
+        margin-top: 0;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        background: var(--primaria);
+        color: #fff;
+        padding: 10px 16px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      button:hover {
+        background: var(--primaria-escura);
+      }
+
+      pre {
+        background: #111827;
+        color: #d1fae5;
+        border: 1px solid var(--borda);
+        border-radius: 10px;
+        min-height: 120px;
+        margin-top: 16px;
+        padding: 14px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pitugues em script tags</h1>
+      <p>Este exemplo usa o runtime em TypeScript para executar Pitugues no navegador.</p>
+      <button id="botao-alerta">Clique para testar bind() + alert()</button>
+      <pre id="saida"></pre>
+    </main>
+
+    <script type="text/pitugues" id="exemplo-principal">
+importar { bind, document, alert } de dom
+
+imprima("Ola do Pitugues Script!")
+valores = [1, 2, 3, 4, 5]
+
+funcao quadrado(n):
+    retorna n ** 2
+
+imprima(valores.mapear(quadrado))
+
+funcao ao_clicar(evento):
+    alert("Evento de DOM acionado por Pitugues!")
+
+bind("#botao-alerta", "click", ao_clicar)
+    </script>
+
+    <script src="./node_modules/@designliquido/delegua/umd/delegua.js"></script>
+    <script src="./dist/pitugues-script.js"></script>
+    <script>
+      const saida = document.getElementById('saida');
+
+      window
+        .pitugues({
+          ids: ['exemplo-principal'],
+          autoIniciar: false,
+          saida: (texto) => {
+            if (!saida) return;
+            saida.textContent += texto + '\n';
+          },
+        })
+        .then((resultados) => {
+          const falhas = resultados.filter((r) => !r.sucesso);
+          if (falhas.length > 0) {
+            console.error('Falhas Pitugues:', falhas);
+          }
+        });
+    </script>
+  </body>
+</html>
