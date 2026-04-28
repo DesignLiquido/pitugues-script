@@ -24,6 +24,7 @@ function prepararPublicacao() {
     bugs: packageRaiz.bugs,
     funding: packageRaiz.funding,
     keywords: packageRaiz.keywords,
+    publishConfig: packageRaiz.publishConfig,
     main: 'pitugues-script.js',
     files: ['pitugues-script.js', 'pitugues-script.min.js', 'README.md', 'LICENSE'],
   };
