@@ -1,5 +1,5 @@
 {
-  "name": "@designliquido/pitugues-script",
+  "name": "@cumbucadev/pitugues-script",
   "version": "0.0.0",
   "description": "Tempo de execucao de navegador para executar Pitugues em tags <script> HTML.",
   "license": "MIT",
