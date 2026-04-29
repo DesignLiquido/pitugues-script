@@ -26,12 +26,33 @@ describe('Utilitarios do runtime Pitugues', () => {
   });
 
   it('extrai importacao de dom e preserva o restante do codigo', () => {
-    const codigo = ['importar { bind, document, alert } de dom', 'escreva("ok")'].join('\n');
-
+		const codigo = [
+			'importar { bind, document, alert } de dom',
+			'escreva("ok")'
+		].join('\n');
     const resultado = extrairImportacoesDeDom(codigo);
 
     expect(resultado.simbolosImportados).toEqual(['bind', 'document', 'alert']);
-    expect(resultado.codigoSemImportacoes).toBe('escreva("ok")');
+		expect(normalizarCodigoParaLinhas(resultado.codigoSemImportacoes)).toEqual(
+			['', 'escreva("ok")']
+		);
+	});
+
+  it('preserva quantidade de linhas ao remover importacao multi-linha', () => {
+    const codigo = [
+      'importar {',
+      '  bind,',
+			'  document,',
+      '  alert',
+      '} de dom',
+      'escreva("ok")',
+    ].join('\n');
+		const resultado = extrairImportacoesDeDom(codigo);
+
+    expect(resultado.simbolosImportados).toEqual(['bind', 'document', 'alert']);
+		expect(normalizarCodigoParaLinhas(resultado.codigoSemImportacoes)).toEqual(
+			['', '', '', '', '', 'escreva("ok")']
+		);
   });
 
   it('consolida simbolos repetidos de dom sem duplicar', () => {
