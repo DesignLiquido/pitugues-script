@@ -21,8 +21,7 @@ declare global {
 }
 
 export function normalizarCodigoParaLinhas(codigo: string): string[] {
-  const normalizado = codigo.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  return normalizado.split('\n');
+	return codigo.split(/\r\n|\r|\n/);
 }
 
 export function extrairMensagemErro(erro: unknown): string {
@@ -41,31 +40,30 @@ export function extrairMensagemErro(erro: unknown): string {
   }
 }
 
-export function extrairImportacoesDeDom(codigo: string): ImportacaoDomResolvida {
-  const linhas = normalizarCodigoParaLinhas(codigo);
-  const simbolosImportados = new Set<string>();
-  const linhasSemImportacoes: string[] = [];
+export function extrairImportacoesDeDom(
+	codigo: string
+): ImportacaoDomResolvida {
+	const simbolosImportados = new Set<string>();
+	const regexImportacao = /importar\s*\{([\s\S]+?)\}\s*de\s+dom\s*;?/gi;
 
-  for (const linha of linhas) {
-    const correspondenciaImportacao = linha.match(/^\s*importar\s*\{\s*([^}]+)\s*\}\s*de\s+dom\s*;?\s*$/i);
+	const codigoSemImportacoes = codigo.replace(
+		regexImportacao,
+		(_, simbolosMatch) => {
+			const listaDeSimbolos = simbolosMatch
+				.split(',')
+				.map((s: string) => s.trim())
+				.filter(Boolean);
 
-    if (!correspondenciaImportacao) {
-      linhasSemImportacoes.push(linha);
-      continue;
-    }
+			for (const simbolo of listaDeSimbolos) {
+				simbolosImportados.add(simbolo);
+			}
 
-    const listaDeSimbolos = correspondenciaImportacao[1]
-      .split(',')
-      .map((simbolo) => simbolo.trim())
-      .filter((simbolo) => simbolo.length > 0);
-
-    for (const simbolo of listaDeSimbolos) {
-      simbolosImportados.add(simbolo);
-    }
-  }
+			return '';
+		}
+	);
 
   return {
-    codigoSemImportacoes: linhasSemImportacoes.join('\n'),
+    codigoSemImportacoes,
     simbolosImportados: [...simbolosImportados],
   };
 }
@@ -152,18 +150,23 @@ class PituguesTempoExecucaoNavegador {
     };
   }
 
-  public async executar(opcoes?: OpcoesTempoExecucaoPituguesInterface): Promise<ResultadoExecucaoPituguesInterface[]> {
+	public async executar(
+		opcoes?: OpcoesTempoExecucaoPituguesInterface
+	): Promise<ResultadoExecucaoPituguesInterface[]> {
     this.configurar(opcoes);
 
     if (!window.Delegua) {
       throw new Error('window.Delegua nao encontrado. Carregue o UMD da Delegua antes de pitugues-script.');
     }
 
-    const elementosDeScript = this.coletarElementosDeScript();
+		const elementosDeScript = this.coletarElementosDeScript();
+		const promessasDeFetch = elementosDeScript.map(
+			script => this.preCarregarScript(script)
+		);
     const resultados: ResultadoExecucaoPituguesInterface[] = [];
 
-    for (const script of elementosDeScript) {
-      const resultado = await this.executarElementoScript(script);
+    for (const promessa of promessasDeFetch) {
+      const resultado = await this.executarCodigoPreCarregado(await promessa);
       resultados.push(resultado);
       this.opcoes.aoFinalizarScript?.(resultado);
     }
@@ -199,11 +202,21 @@ class PituguesTempoExecucaoNavegador {
 
     const ids = new Set(this.opcoes.ids);
     return encontrados.filter((elemento) => !!elemento.id && ids.has(elemento.id));
-  }
+	}
 
-  private async executarElementoScript(script: HTMLScriptElement): Promise<ResultadoExecucaoPituguesInterface> {
-    const idScript = script.id || this.proximoIdScript();
-    const hashArquivo = Date.now() + this.contadorScripts;
+	private async preCarregarScript(script: HTMLScriptElement): Promise<{
+    codigo: string | null;
+    idScript: string;
+    hashArquivo: number;
+    origem?: string;
+    erroRetorno?: ResultadoExecucaoPituguesInterface;
+  }> {
+		const indice = this.contadorScripts++;
+		const idScript = script.id || (indice === 0
+			? '__pitugues__main__'
+			: `__pitugues__main__${indice}`
+		)
+    const hashArquivo = Date.now() + indice;
 
     this.opcoes.aoIniciarScript?.({
       scriptId: idScript,
@@ -215,6 +228,38 @@ class PituguesTempoExecucaoNavegador {
         const resposta = await fetch(script.src);
         if (!resposta.ok) {
           return {
+            codigo: null,
+            idScript,
+            hashArquivo,
+            origem: script.src,
+            erroRetorno: {
+              scriptId: idScript,
+              origem: script.src,
+              sucesso: false,
+              saida: [],
+              erros: [
+                {
+                  etapa: 'carregamento',
+                  mensagem: `Falha ao carregar script remoto (${resposta.status} ${resposta.statusText}).`,
+                },
+              ],
+              tempoMs: 0,
+            },
+          };
+        }
+
+				const codigoRemoto = await resposta.text();
+
+				return {
+					codigo: codigoRemoto, idScript, hashArquivo, origem: script.src
+				};
+      } catch (erro) {
+        return {
+          codigo: null,
+          idScript,
+          hashArquivo,
+          origem: script.src,
+          erroRetorno: {
             scriptId: idScript,
             origem: script.src,
             sucesso: false,
@@ -222,34 +267,41 @@ class PituguesTempoExecucaoNavegador {
             erros: [
               {
                 etapa: 'carregamento',
-                mensagem: `Falha ao carregar script remoto (${resposta.status} ${resposta.statusText}).`,
+                mensagem: 'Erro ao carregar script remoto.',
+                detalhe: extrairMensagemErro(erro),
               },
             ],
             tempoMs: 0,
-          };
-        }
-
-        const codigoRemoto = await resposta.text();
-        return this.executarCodigoFonte(codigoRemoto, idScript, hashArquivo, script.src);
-      } catch (erro) {
-        return {
-          scriptId: idScript,
-          origem: script.src,
-          sucesso: false,
-          saida: [],
-          erros: [
-            {
-              etapa: 'carregamento',
-              mensagem: 'Erro ao carregar script remoto.',
-              detalhe: extrairMensagemErro(erro),
-            },
-          ],
-          tempoMs: 0,
+          },
         };
       }
     }
 
-    return this.executarCodigoFonte(script.textContent ?? '', idScript, hashArquivo);
+    return {
+      codigo: script.textContent ?? '',
+      idScript,
+      hashArquivo,
+      origem: undefined,
+    };
+  }
+
+  private async executarCodigoPreCarregado(preCarregado: {
+    codigo: string | null;
+    idScript: string;
+    hashArquivo: number;
+    origem?: string;
+    erroRetorno?: ResultadoExecucaoPituguesInterface;
+  }): Promise<ResultadoExecucaoPituguesInterface> {
+    if (preCarregado.erroRetorno) {
+      return preCarregado.erroRetorno;
+		}
+
+    return this.executarCodigoFonte(
+      preCarregado.codigo || '',
+      preCarregado.idScript,
+      preCarregado.hashArquivo,
+      preCarregado.origem
+    );
   }
 
   private obterClasseRuntime<T>(delegua: PituguesApi, chaves: string[]): (new (...args: unknown[]) => T) {
@@ -464,8 +516,11 @@ class PituguesTempoExecucaoNavegador {
   }
 
   private proximoIdScript(): string {
-    const id = this.contadorScripts === 0 ? '__pitugues__main__' : `__pitugues__main__${this.contadorScripts}`;
-    this.contadorScripts += 1;
+		const id = this.contadorScripts === 0
+			? '__pitugues__main__'
+			: `__pitugues__main__${this.contadorScripts}`;
+		this.contadorScripts += 1;
+
     return id;
   }
 
