@@ -21,7 +21,7 @@ declare global {
 }
 
 export function normalizarCodigoParaLinhas(codigo: string): string[] {
-	return codigo.split(/\r\n|\r|\n/);
+  return codigo.split(/\r\n|\r|\n/);
 }
 
 export function extrairMensagemErro(erro: unknown): string {
@@ -48,7 +48,7 @@ export function extrairImportacoesDeDom(
 
 	const codigoSemImportacoes = codigo.replace(
 		regexImportacao,
-		(_, simbolosMatch) => {
+		(match, simbolosMatch) => {
 			const listaDeSimbolos = simbolosMatch
 				.split(',')
 				.map((s: string) => s.trim())
@@ -58,7 +58,9 @@ export function extrairImportacoesDeDom(
 				simbolosImportados.add(simbolo);
 			}
 
-			return '';
+			const quebras = (match.match(/\n/g) ?? []).length;
+
+			return '\n'.repeat(quebras);
 		}
 	);
 
@@ -161,7 +163,24 @@ class PituguesTempoExecucaoNavegador {
 
 		const elementosDeScript = this.coletarElementosDeScript();
 		const promessasDeFetch = elementosDeScript.map(
-			script => this.preCarregarScript(script)
+			script => this.preCarregarScript(script).catch((erro) => ({
+				codigo: null,
+				idScript: script.id || '__pitugues__desconhecido__',
+				hashArquivo: 0,
+				origem: script.src || undefined,
+				erroRetorno: {
+					scriptId: script.id || '__pitugues__desconhecido__',
+					origem: script.src || undefined,
+					sucesso: false,
+					saida: [] as string[],
+					erros: [{
+						etapa: 'carregamento' as const,
+						mensagem: 'Falha inesperada no pre-carregamento.',
+						detalhe: extrairMensagemErro(erro),
+					}],
+					tempoMs: 0,
+				}
+			}))
 		);
     const resultados: ResultadoExecucaoPituguesInterface[] = [];
 
